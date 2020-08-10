@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/alvarsnow/BotCastroCov/issues"
   },
-  "homepage": "https://github.com/alvarsnow/BotCastroCov#readme"
+  "homepage": "https://github.com/alvarsnow/BotCastroCov#readme",
+  "dependencies": {
+    "twit": "^2.2.11"
+  }
 }
