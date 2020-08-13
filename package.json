@@ -21,6 +21,8 @@
   },
   "homepage": "https://github.com/alvarsnow/BotCastroCov#readme",
   "dependencies": {
+    "axios": "^0.19.2",
+    "firebase": "^7.17.2",
     "twit": "^2.2.11"
   }
 }
