@@ -1,7 +1,14 @@
-'use strict'
+//'use strict'
 const Twit = require('twit');
 const Twitter = new Twit(require('./config.js'));
 const axios = require('axios');
+const admin = require('firebase-admin');
+const serviceAccount = require("KeyFirebase.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://covidcastro-4b8b1.firebaseio.com"
+});
 
 // anteriores
 let antMuertos, antTotales, antRecuperados, antActivos;

@@ -23,6 +23,7 @@
   "dependencies": {
     "axios": "^0.19.2",
     "firebase": "^7.17.2",
+    "firebase-admin": "^9.1.0",
     "twit": "^2.2.11"
   }
 }
