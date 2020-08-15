@@ -1,14 +1,18 @@
-//'use strict'
+'use strict'
 const Twit = require('twit');
 const Twitter = new Twit(require('./config.js'));
 const axios = require('axios');
+
+// Firebase
 const admin = require('firebase-admin');
-const serviceAccount = require("KeyFirebase.json");
+const serviceAccount = require('./KeyFirebase.json');
+
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://covidcastro-4b8b1.firebaseio.com"
+    credential: admin.credential.cert(serviceAccount)
 });
+
+let db = admin.firestore();
 
 // anteriores
 let antMuertos, antTotales, antRecuperados, antActivos;
@@ -84,6 +88,60 @@ function getMes(mes) {
     }
 }
 
+
+function tuitStatus(activos, totales, muertos, recuperados, fecha) {
+    let status = "A " + fecha.getDate() + " de " + getMes(fecha.getMonth()) + " de " + fecha.getFullYear() +
+        " hay en #CastroUrdiales:\n" + activos + " casos activos\n" + recuperados + " recuperados\n" + muertos + " fallecidos\nEn total: " + totales;
+
+    Twitter.post('statuses/update', { status: status }, function (err, data, response) {
+        console.log(data)
+    })
+}
+
+function subirDatos(activos, totales, muertos, recuperados, fecha) {
+    console.log(fecha);
+
+    //Referencia de la coleccion
+    let ref = db.collection('datosDia')
+
+    //Solo crear si no hay ninguna ficha de hoy
+    ref.where('Fecha', '>=', fecha).get()
+        .then(snap => {
+            if (snap.empty) {
+                console.log("No hay registros de hoy, introduciendo nuevo");
+                //generando registro
+                let setDia = ref.doc().set({
+                    Fecha: fecha,
+                    activos: activos,
+                    muertos: muertos,
+                    totales: totales,
+                    recuperados: recuperados
+                }).catch(err => {
+                    console.log(err);
+                })
+            } else {
+                //! actualizar datos
+                console.log("ya hay datos de hoy")
+            }
+        })
+        .catch(err => {
+            console.log(err);
+        })
+
+
+}
+
+function leerDatos() {
+    let ref = db.collection('datosDia').get()
+        .then(snap => {
+            snap.forEach(doc => {
+                console.log(doc.id, '--', doc.data());
+            })
+        })
+}
+////////////////
+// Funcion Main
+////////////////
 async function main() {
 
     // cada uso espera a que termine el anterior, se puede mejorar
@@ -95,28 +153,14 @@ async function main() {
     fecha = new Date(fecha);
 
     let diffActivos;
-    // console.log(activos, totales, muertos, recuperados)
 
-    let status = "A " + fecha.getDate() + " de " + getMes(fecha.getMonth()) + " de " + fecha.getFullYear() + 
-        " hay en #CastroUrdiales:\n"+activos+" casos activos\n"+recuperados+" recuperados\n"+muertos+" fallecidos\nEn total: "+totales;
-    //console.log(status);
-    if (antActivos != undefined) {
-
-    }
-
-    Twitter.post('statuses/update', { status: status }, function (err, data, response) {
-        console.log(data)
-    })
-
-    antActivos = activos;
-    antMuertos = muertos;
-    antRecuperados = recuperados;
-    antTotales = totales
-
+    subirDatos(activos, totales, muertos, recuperados, fecha);
+    //tuitStatus(activos, totales, muertos, recuperados, fecha);
+    //leerDatos()
 }
 
 // Inicio
 main();
 
 // intervalo de repeticion (en ms)
-setInterval(main, 3600000);
+//setInterval(main, 3600000);
