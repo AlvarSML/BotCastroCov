@@ -2,7 +2,7 @@
 const Twit = require('twit');
 const Twitter = new Twit(require('./config.js'));
 const axios = require('axios');
-
+const Dato = require('./objDatos.js');
 // Firebase
 const admin = require('firebase-admin');
 const serviceAccount = require('./KeyFirebase.json');
@@ -90,37 +90,42 @@ function getMes(mes) {
 
 
 function tuitStatus(activos, totales, muertos, recuperados, fecha) {
+    let anteriores = leerUltimo();
+    console.log(anteriores);
     let status = "A " + fecha.getDate() + " de " + getMes(fecha.getMonth()) + " de " + fecha.getFullYear() +
-        " hay en #CastroUrdiales:\n" + activos + " casos activos\n" + recuperados + " recuperados\n" + muertos + " fallecidos\nEn total: " + totales;
-
+        " hay en #CastroUrdiales:\n" + activos + " casos activos (+" + (anteriores.activos - activos) + ")\n" + recuperados + " recuperados\n" + muertos + " fallecidos\nEn total: " + totales;
+    console.log(status);
     Twitter.post('statuses/update', { status: status }, function (err, data, response) {
         console.log(data)
     })
 }
 
-function subirDatos(activos, totales, muertos, recuperados, fecha) {
-    console.log(fecha);
-
+function subirDatos(ultimo, actual) {
+    //console.log(fecha);
+    actual.Fecha.setHours(2, 0, 0);
     //Referencia de la coleccion
     let ref = db.collection('datosDia')
 
     //Solo crear si no hay ninguna ficha de hoy
-    ref.where('Fecha', '>=', fecha).get()
+    ref.where('Fecha', '>=', actual.Fecha).get()
         .then(snap => {
             if (snap.empty) {
                 console.log("No hay registros de hoy, introduciendo nuevo");
                 //generando registro
                 let setDia = ref.doc().set({
-                    Fecha: fecha,
-                    activos: activos,
-                    muertos: muertos,
-                    totales: totales,
-                    recuperados: recuperados
+                    Fecha: actual.Fecha,
+                    activos: actual.activos,
+                    muertos: actual.muertos,
+                    totales: actual.totales,
+                    recuperados: actual.recuperados
                 }).catch(err => {
                     console.log(err);
                 })
+                // al haber nuevos datos, estos se tuitean
+                tuitStatus(actual,ultimo);
             } else {
                 //! actualizar datos
+                //! solo se actualiza una vez al dia
                 console.log("ya hay datos de hoy")
             }
         })
@@ -131,13 +136,22 @@ function subirDatos(activos, totales, muertos, recuperados, fecha) {
 
 }
 
-function leerDatos() {
-    let ref = db.collection('datosDia').get()
-        .then(snap => {
-            snap.forEach(doc => {
-                console.log(doc.id, '--', doc.data());
-            })
+async function leerUltimo() {
+
+    let snap = await db.collection('datosDia').orderBy('Fecha', 'desc').limit(1).get();
+    let ultimo = new Dato();
+
+    if (!snap.empty) {
+        snap.forEach(doc => {
+            ultimo.Fecha = doc.data().Fecha;
+            ultimo.totales = doc.data().totales;
+            ultimo.activos = doc.data().activos;
+            ultimo.muertos = doc.data().muertos;
+            ultimo.recuperados = doc.data().recuperados;
         })
+
+        return ultimo;
+    }
 }
 ////////////////
 // Funcion Main
@@ -145,6 +159,9 @@ function leerDatos() {
 async function main() {
 
     // cada uso espera a que termine el anterior, se puede mejorar
+    //leerUltimo().then(datos => console.log(datos));
+
+
     let activos = await getActivos(castro);
     let totales = await getTotales(castro);
     let muertos = await getMuertos(castro);
@@ -152,15 +169,20 @@ async function main() {
     let fecha = await getFecha();
     fecha = new Date(fecha);
 
-    let diffActivos;
+    //let diffActivos;
+    let ultimo = await leerUltimo();
+    let actual = new Dato(activos,muertos,recuperados,totales,fecha);
+
+    console.log(ultimo);
+    console.log(actual);
 
     subirDatos(activos, totales, muertos, recuperados, fecha);
-    //tuitStatus(activos, totales, muertos, recuperados, fecha);
-    //leerDatos()
+
+    //leerDatosAyer(fecha,activos,totales);
 }
 
 // Inicio
 main();
 
 // intervalo de repeticion (en ms)
-//setInterval(main, 3600000);
+setInterval(main, 3600000);
