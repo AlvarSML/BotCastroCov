@@ -6,7 +6,7 @@ module.exports = class Dato{
         this.muertos = muertos;
         this.recuperados = recuperados;
         this.totales = totales;
-        this.Fecha =  fecha;
+        this.Fecha = fecha;
     }
 
 }

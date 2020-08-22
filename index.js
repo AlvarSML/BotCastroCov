@@ -14,9 +14,6 @@ admin.initializeApp({
 
 let db = admin.firestore();
 
-// anteriores
-let antMuertos, antTotales, antRecuperados, antActivos;
-
 // buscar id por si cambian
 const castro = 19, laredo = 34, santander = 74, guriezo = 29, liendo = 35;
 
@@ -88,52 +85,63 @@ function getMes(mes) {
     }
 }
 
+function getSimbolo(n) {
+    return (n > 0)?'+':'';
+}
 
-function tuitStatus(activos, totales, muertos, recuperados, fecha) {
-    let anteriores = leerUltimo();
-    console.log(anteriores);
-    let status = "A " + fecha.getDate() + " de " + getMes(fecha.getMonth()) + " de " + fecha.getFullYear() +
-        " hay en #CastroUrdiales:\n" + activos + " casos activos (+" + (anteriores.activos - activos) + ")\n" + recuperados + " recuperados\n" + muertos + " fallecidos\nEn total: " + totales;
+
+function tuitStatus(actual, ultimo) {
+
+    let diffAct = actual.activos - ultimo.activos;
+    let diffRec = actual.recuperados - ultimo.recuperados;
+    let diffMuer = actual.muertos - ultimo.muertos;
+    let diffTot = actual.totales - ultimo.totales;
+
+    let status = "A " + actual.Fecha.getDate() + " de " + getMes(actual.Fecha.getMonth()) + " de " + actual.Fecha.getFullYear() +
+        " hay en #CastroUrdiales:\n" + 
+        actual.activos + " casos activos ("+getSimbolo(diffAct)+ ""+ diffAct + ")\n" +
+        actual.recuperados + " recuperados ("+getSimbolo(diffRec)+ ""+ diffRec + ")\n" +
+        actual.muertos + " fallecidos ("+getSimbolo(diffMuer)+ ""+ diffMuer + ")\n" +
+        "En total: " + actual.totales + "("+getSimbolo(diffTot)+ ""+ diffTot + ")\n";
     console.log(status);
     Twitter.post('statuses/update', { status: status }, function (err, data, response) {
         console.log(data)
     })
 }
 
-function subirDatos(ultimo, actual) {
+async function subirDatos(ultimo, actual) {
     //console.log(fecha);
     actual.Fecha.setHours(2, 0, 0);
-    //Referencia de la coleccion
-    let ref = db.collection('datosDia')
+
+    // Si los datos son nuevos se sube un tuit
+    let esUltimo;
 
     //Solo crear si no hay ninguna ficha de hoy
-    ref.where('Fecha', '>=', actual.Fecha).get()
-        .then(snap => {
-            if (snap.empty) {
-                console.log("No hay registros de hoy, introduciendo nuevo");
-                //generando registro
-                let setDia = ref.doc().set({
-                    Fecha: actual.Fecha,
-                    activos: actual.activos,
-                    muertos: actual.muertos,
-                    totales: actual.totales,
-                    recuperados: actual.recuperados
-                }).catch(err => {
-                    console.log(err);
-                })
-                // al haber nuevos datos, estos se tuitean
-                tuitStatus(actual,ultimo);
-            } else {
-                //! actualizar datos
-                //! solo se actualiza una vez al dia
-                console.log("ya hay datos de hoy")
-            }
-        })
-        .catch(err => {
+    let snap = await db.collection('datosDia').where('Fecha', '>=', actual.Fecha).get()
+    
+    if (snap.empty) {
+        console.log("No hay registros de hoy, introduciendo nuevo");
+        //generando registro
+        db.collection('datosDia').doc().set({
+            Fecha: actual.Fecha,
+            activos: actual.activos,
+            muertos: actual.muertos,
+            totales: actual.totales,
+            recuperados: actual.recuperados
+        }).catch(err => {
             console.log(err);
         })
+        // al haber nuevos datos, estos se tuitean
+        esUltimo = true;
+        tuitStatus(actual, ultimo);
+    } else {
+        esUltimo = false;
+        //! actualizar datos
+        //! solo se actualiza una vez al dia
+        console.log("ya hay datos de hoy")
+    }
 
-
+    return esUltimo;
 }
 
 async function leerUltimo() {
@@ -160,23 +168,14 @@ async function main() {
 
     // cada uso espera a que termine el anterior, se puede mejorar
     //leerUltimo().then(datos => console.log(datos));
-
-
-    let activos = await getActivos(castro);
-    let totales = await getTotales(castro);
-    let muertos = await getMuertos(castro);
-    let recuperados = await getAltas(castro);
-    let fecha = await getFecha();
-    fecha = new Date(fecha);
-
-    //let diffActivos;
+    let arrActual = await Promise.all([getActivos(castro), getTotales(castro), getMuertos(castro), getAltas(castro), getFecha(castro)]);
     let ultimo = await leerUltimo();
-    let actual = new Dato(activos,muertos,recuperados,totales,fecha);
+    let actual = new Dato(arrActual[0], arrActual[2], arrActual[3], arrActual[1], new Date(arrActual[4]));
 
     console.log(ultimo);
     console.log(actual);
 
-    subirDatos(activos, totales, muertos, recuperados, fecha);
+    subirDatos(ultimo, actual);
 
     //leerDatosAyer(fecha,activos,totales);
 }
